@@ -2,7 +2,7 @@ name: Continuous Delivery & DAST
 
 on:
   workflow_run:
-    workflows: ["Continuous Integration & Containerization"]
+    workflows: ["Continuous Integration & Security Gates"]
     types:
       - completed
     branches: [ main ]
