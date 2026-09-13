@@ -136,6 +136,7 @@ jobs:
       - name: Push Image to Registry
         if: github.ref == 'refs/heads/main'
         run: |
-          docker tag my-app:${{ github.sha }} ghcr.io/${{ github.repository }}:${{ github.sha }}
-          docker push ghcr.io/${{ github.repository }}:${{ github.sha }}
+          IMAGE_NAME=$(echo "ghcr.io/${{ github.repository }}:${{ github.sha }}" | tr '[:upper:]' '[:lower:]')
+          docker tag my-app:${{ github.sha }} "$IMAGE_NAME"
+          docker push "$IMAGE_NAME"
         # Push só ocorre em main e após Trivy aprovar (needs implícito pela ordem do job)
