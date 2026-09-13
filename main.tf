@@ -6,7 +6,33 @@ terraform {
       version = "~> 5.0"
     }
   }
+
+  backend "s3" {
+    bucket         = "devsecops-tfstate-local"
+    key            = "staging/terraform.tfstate"
+    region         = "us-east-1"
+    dynamodb_table = "terraform-locks"
+    encrypt        = true
+
+    # Credenciais dummy para autenticação no LocalStack
+    access_key = "test"
+    secret_key = "test"
+
+    # Sintaxe moderna que elimina os avisos de deprecation
+    endpoints = {
+      s3       = "http://localhost:4566"
+      dynamodb = "http://localhost:4566"
+      iam      = "http://localhost:4566"
+      sts      = "http://localhost:4566"
+    }
+
+    skip_credentials_validation = true
+    skip_metadata_api_check     = true
+    skip_requesting_account_id  = true
+    use_path_style              = true
+  }
 }
+
 
 provider "aws" {
   region                      = var.aws_region
@@ -77,15 +103,15 @@ resource "aws_cloudwatch_log_group" "api_logs" {
   }
 }
 
-# 4. Cluster ECS
-resource "aws_ecs_cluster" "main" {
-  name = "${var.environment}-cluster"
+# # 4. Cluster ECS
+# resource "aws_ecs_cluster" "main" {
+#   name = "${var.environment}-cluster"
 
-  setting {
-    name  = "containerInsights"
-    value = "enabled"
-  }
-}
+#   setting {
+#     name  = "containerInsights"
+#     value = "enabled"
+#   }
+# }
 
 # 5. Security Group seguro associado à VPC local
 resource "aws_security_group" "ecs_sg" {
