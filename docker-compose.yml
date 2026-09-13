@@ -72,7 +72,7 @@ services:
     environment:
       - LOCALSTACK_AUTH_TOKEN=${LOCALSTACK_AUTH_TOKEN:?} 
       - DOCKER_HOST=unix:///var/run/docker.sock
-      - SERVICES=ecs,ec2,logs,kms,s3,dynamodb
+      - SERVICES=ec2,logs,kms,s3,dynamodb,sts,iam
     volumes:
       - "/var/run/docker.sock:/var/run/docker.sock"
       - "./init-scripts:/etc/localstack/init/ready.d"
