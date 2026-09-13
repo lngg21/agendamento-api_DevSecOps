@@ -1,0 +1,54 @@
+name: Security Gates (Shift-Left)
+
+on:
+  push:
+    branches: 
+        - main
+        - develop 
+  pull_request:
+    branches: 
+        - main
+
+jobs:
+  secret-scan:
+    name: "Gitleaks - Secret Scanning"
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Source Code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Run Gitleaks
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        # Se um segredo for encontrado, o job falha e interrompe a esteira
+
+  sast-scan:
+    name: "Semgrep - Static Application Security Testing"
+    runs-on: ubuntu-latest
+    needs: secret-scan
+    steps:
+      - name: Checkout Source Code
+        uses: actions/checkout@v4
+
+      - name: Run Semgrep
+        run: |
+          python3 -m pip install semgrep
+          semgrep scan --config=auto --error --severity=ERROR
+
+  iac-scan:
+    name: "Checkov - Infrastructure as Code Scanning"
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Source Code
+        uses: actions/checkout@v4
+
+      - name: Run Checkov
+        uses: bridgecrewio/checkov-action@master
+        with:
+          file: main.tf
+          framework: terraform
+          soft_fail: false
+          output_format: cli

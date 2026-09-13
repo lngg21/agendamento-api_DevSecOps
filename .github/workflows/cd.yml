@@ -1,0 +1,54 @@
+name: Continuous Delivery & DAST
+
+on:
+  workflow_run:
+    workflows: ["Continuous Integration & Containerization"]
+    types:
+      - completed
+    branches: [ main ]
+
+jobs:
+  deploy-staging:
+    name: "Deploy to Staging Environment"
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Source Code
+        uses: actions/checkout@v4
+
+      - name: Deploy Staging Application
+        run: |
+          echo "Simulando deploy da imagem no cluster de Staging..."
+          # Em ambiente real: terraform apply / helm upgrade staging
+
+  dast-scan:
+    name: "OWASP ZAP - Dynamic Application Security Testing"
+    runs-on: ubuntu-latest
+    needs: deploy-staging
+    steps:
+      - name: Checkout Source Code
+        uses: actions/checkout@v4
+
+      - name: OWASP ZAP Baseline Scan
+        uses: zaproxy/action-baseline@v0.12.0
+        with:
+          target: 'https://staging.exemplo.com'
+          rules_file_name: '.zap/rules.tsv'
+          cmd_options: '-a'
+          fail_action: true
+        # fail_action: true encerra o job com erro caso encontre vulnerabilidades de risco
+
+  deploy-production:
+    name: "Deploy to Production Environment"
+    runs-on: ubuntu-latest
+    needs: dast-scan
+    environment:
+      name: production
+    steps:
+      - name: Checkout Source Code
+        uses: actions/checkout@v4
+
+      - name: Apply Production Deploy
+        run: |
+          echo "Quality Gates de segurança e testes aprovados!"
+          echo "Executando deploy em Producao e ativando monitoramento com Prometheus/Grafana..."
