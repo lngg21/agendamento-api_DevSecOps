@@ -1,13 +1,36 @@
-name: Continuous Integration & Containerization
+name: Continuous Integration & Security Gates
 
 on:
   push:
-    branches: [ main, staging ]
+    branches:
+      - main
+      - develop
+  pull_request:
+    branches:
+      - main
 
 jobs:
+  # ETAPA 1: Proteção de Segredos - bloqueia tudo se houver segredo exposto
+  secret-scan:
+    name: "Gitleaks - Secret Scanning"
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Source Code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Run Gitleaks
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        # Se um segredo for encontrado, o job falha e interrompe a esteira
+
+  # ETAPA 2: Lint & Testes Unitários - só roda se não houver segredos expostos
   test-and-lint:
     name: "Lint & Unit Tests"
     runs-on: ubuntu-latest
+    needs: secret-scan
     steps:
       - name: Checkout Source Code
         uses: actions/checkout@v4
@@ -24,9 +47,25 @@ jobs:
       - name: Run Tests
         run: npm test --if-present
 
+  # ETAPA 3: SAST - só roda se lint/testes passarem
+  sast-scan:
+    name: "Semgrep - Static Application Security Testing"
+    runs-on: ubuntu-latest
+    needs: test-and-lint
+    steps:
+      - name: Checkout Source Code
+        uses: actions/checkout@v4
+
+      - name: Run Semgrep
+        run: |
+          python3 -m pip install semgrep
+          semgrep scan --config=auto --error --severity=ERROR
+
+  # ETAPA 4 (paralela): Validação Terraform - independente do código da app
   terraform-lint:
     name: "Terraform fmt & validate"
     runs-on: ubuntu-latest
+    needs: secret-scan
     steps:
       - name: Checkout Source Code
         uses: actions/checkout@v4
@@ -43,10 +82,31 @@ jobs:
       - name: Terraform Validate
         run: terraform validate
 
-  docker-build-and-scan:
-    name: "Docker Build & Trivy Image Scan"
+  # ETAPA 5 (paralela à terraform-lint): Checkov - scan de IaC
+  iac-scan:
+    name: "Checkov - Infrastructure as Code Scanning"
     runs-on: ubuntu-latest
-    needs: [test-and-lint, terraform-lint]
+    needs: terraform-lint
+    steps:
+      - name: Checkout Source Code
+        uses: actions/checkout@v4
+
+      - name: Run Checkov
+        uses: bridgecrewio/checkov-action@master
+        with:
+          file: main.tf
+          framework: terraform
+          soft_fail: false
+          output_format: cli
+
+  # ETAPA 6: Build & Scan da Imagem - só roda se TUDO acima passar
+  docker-build-and-scan:
+    name: "Docker Build, Trivy Scan & Push"
+    runs-on: ubuntu-latest
+    needs: [sast-scan, iac-scan]
+    permissions:
+      contents: read
+      packages: write
     steps:
       - name: Checkout Source Code
         uses: actions/checkout@v4
@@ -63,3 +123,20 @@ jobs:
           ignore-unfixed: true
           vuln-type: 'os,library'
           severity: 'CRITICAL,HIGH'
+        # Se houver vulnerabilidade crítica, o job falha e a imagem não é publicada
+
+      - name: Login to GHCR
+        if: github.ref == 'refs/heads/main'
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Push Image to Registry
+        if: github.ref == 'refs/heads/main'
+        run: |
+          IMAGE_NAME=$(echo "ghcr.io/${{ github.repository }}:${{ github.sha }}" | tr '[:upper:]' '[:lower:]')
+          docker tag my-app:${{ github.sha }} "$IMAGE_NAME"
+          docker push "$IMAGE_NAME"
+        # Push só ocorre em main e após Trivy aprovar (needs implícito pela ordem do job)

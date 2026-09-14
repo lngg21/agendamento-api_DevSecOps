@@ -1,0 +1,16 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+scrape_configs:
+  - job_name: "api-agendamento"
+    metrics_path: "/metrics"
+    static_configs:
+      - targets: ["api:3000"]
+        labels:
+          environment: "staging"
+          service: "api-agendamento-consultas"
+
+  - job_name: "prometheus"
+    static_configs:
+      - targets: ["localhost:9090"]

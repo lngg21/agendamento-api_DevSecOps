@@ -4,3 +4,13 @@ dist/
 *.js.map
 *.d.ts
 !tsconfig.json
+**/.terraform/*
+.terraform/
+
+# Arquivos de estado (State files)
+*.tfstate
+*.tfstate.*
+
+# Arquivos de variáveis sensíveis
+*.tfvars
+*.tfvars.json
